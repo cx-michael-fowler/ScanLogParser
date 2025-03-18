@@ -1,5 +1,5 @@
-# ScanLogParser
-Takes a scan log file as an input and opens an Excel document with parsed details from the log file
+# Checkmarx SAST Scan Log Parser
+Takes a SAST scan log file as an input and opens an Excel document with parsed details from the log file
 
 Has tabs for General Details, Engine Configuration, Predefined File Exclusions, Phases, Files, Results Summary and General Queries 
 
