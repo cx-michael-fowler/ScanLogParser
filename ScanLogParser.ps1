@@ -25,7 +25,7 @@ Parse Log from Checkmarx One Scan ID
 
 .Notes
 Version:     2.0
-Date:        18/03/2025
+Date:        21/03/2025
 Written by:  Michael Fowler
 Contact:     michael.fowler@checkmarx.com
 
@@ -34,15 +34,13 @@ Version    Detail
 -----------------
 1.0        Original version
 2.0        Added functionality to download log from Checkmarx One using given Scan ID
+2.1        Updated Parsing of General Queries and Results Summary
   
 .PARAMETER help
 Display help
 
 .PARAMETER logPath
-The file path for the Scan Log to be processes. Use when providing a downloaded log file
-
-.PARAMETER cxOne
-Switch to specifify log downloaded from CxOne
+The file path for the Scan Log to be processed. Use when providing a downloaded log file
 
 .PARAMETER scanId
 A Checkmarx One Scan ID which will be used to retrieve the SAST log
@@ -67,9 +65,6 @@ Param (
 
     [Parameter(ParameterSetName='File',Mandatory=$true, HelpMessage="Enter Full path for scan log")]
     [string]$logPath,
-
-    [Parameter(ParameterSetName='File',Mandatory=$false, HelpMessage="Specifies file from Checkmarx One")]
-    [switch]$cxOne,
 
     [Parameter(ParameterSetName='CxOne',Mandatory=$true, HelpMessage="Enter the Checkmarx One Scan ID")]
     [string]$scanId,
@@ -144,24 +139,15 @@ Begin {
         #--------------------------------------------------------------------------------------------------------------------------------------------
         #region Constructors
         
-        ResultsSummary ([String] $line, [bool]$cxOne) {
-            if ($cxOne) {
+        ResultsSummary ([String] $line) {
 
-                $this.Query = ($line.Substring(0,101)).Trim()
-                $this.Severity = ($line.Substring(111,13)).Trim()
-                $this.Status = ($line.Substring(124,9)).Trim()
-                $this.Results = ($line.Substring(142,7)).Trim()
-                $this.Duration = [TimeSpan]::ParseExact($line.Substring(160,12), "hh\:mm\:ss\.fff", $null) 
-                $this.Cwe = ($line.Substring(175,12)).Trim()
-            }
-            else {
-                $this.Query = ($line.Substring(0,88)).Trim()
-                $this.Severity = ($line.Substring(98,13)).Trim()
-                $this.Status = ($line.Substring(111,9)).Trim()
-                $this.Results = ($line.Substring(129,7)).Trim()
-                $this.Duration = [TimeSpan]::ParseExact($line.Substring(147,12), "hh\:mm\:ss\.fff", $null) 
-                $this.Cwe = ($line.Substring(162,12)).Trim()
-            }
+            $line -match "(.*)\s{2,}Severity:\s(.*)\s{2,}(\D+)Results:\s(.*)\s{2,}Duration\s=\s(\d\d:\d\d:\d\d\.\d\d\d)\s{2,}(.*)\s{2,}CxDescription.*"
+            $this.Query = $Matches[1]
+            $this.Severity = $Matches[2]
+            $this.Status = $Matches[3]
+            $this.Results = $Matches[4]
+            $this.Duration = [TimeSpan]::ParseExact($Matches[5], "hh\:mm\:ss\.fff", $null)
+            $this.Cwe = $Matches[6]
         }
         
         #endregion
@@ -184,12 +170,13 @@ Begin {
         #--------------------------------------------------------------------------------------------------------------------------------------------
         #region Constructors
 
-            GeneralQuery ([String] $line) {
-                $this.Query = ($line.Substring(0,80)).Trim()
-                $this.Status = ($line.Substring(80,17)).Trim()
-                $this.Results = ($line.Substring(100,14)).Trim()
-                $this.Duration = [TimeSpan]::ParseExact($line.Substring(114,12), "hh\:mm\:ss\.fff", $null)
-            }
+        GeneralQuery ([String] $line) {
+            $out = $line -split "\s{2,}"
+            $this.Query = $out[0].Trim()
+            $this.Status = $out[1].Trim()
+            $this.Results = $out[2].Trim()
+            $this.Duration = [TimeSpan]::ParseExact($out[3].Trim(), "hh\:mm\:ss\.fff", $null)
+        }
 
         #endregion
         #--------------------------------------------------------------------------------------------------------------------------------------------
@@ -345,8 +332,7 @@ Begin {
 
     Function ParseLogFile {
         Param (
-            [Array]$lines,
-            [bool]$cxOne
+            [Array]$lines
         )  
 
         Write-Verbose "Parsing log file" 
@@ -460,7 +446,7 @@ Begin {
             }
 
             #Results summary
-            if ($lines[$i] -match "Query - (.*)") { $summary.Add([ResultsSummary]::new($Matches[1], $cxOne)) }
+            if ($lines[$i] -match "Query - (.*)") { $summary.Add([ResultsSummary]::new($Matches[1])) }
    
             #General Queries
             if ($lines[$i] -match "^(-){27}General") {
@@ -972,8 +958,7 @@ Process {
     }
 
     Write-Host "Parsing log file"
-    if ($logPath) { ParseLogFile $lines $cxOne }
-    else { ParseLogFile $lines $true }
+    ParseLogFile $lines
     Write-Host "Completed parsing"
 
     Write-Host "Creating Excel"
