@@ -125,7 +125,7 @@
             Function to get a hash of all scans filtered by statuses provided as a CSV string and number of days.
             Key = Scan ID and Value = Scan Object
             Valid Statuses are Queued, Running, Completed, Failed, Partial, Canceled
-            If all Statuses are required use "All"
+            If all Statuses are required pass $null or empty string for statuses
             Number of days must be a integer greater or equal to 0. 0 will return all days
         Parameters
             CxOneConnObj - Checkmarx One connection object
@@ -138,7 +138,6 @@
         Details
             Function to get a hash scans for a provided as a CSV string of Scan IDs
             Key = Scan ID and Value = Scan Object
-            If all Statuses are required use "All"
         Parameters
             CxOneConnObj - Checkmarx One connection object
             statuses - CSV string of scan statuses to filter results
@@ -1394,12 +1393,12 @@ class SeverityCount {
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Hidden Variables
         
-    Hidden [Int]$Total
-    Hidden [Int]$TotalCritical
-    Hidden [Int]$TotalHigh
-    Hidden [Int]$TotalMedium
-    Hidden [Int]$TotalLow
-    Hidden [Int]$TotalInfo
+        [Int]$Total
+        [Int]$TotalCritical
+        [Int]$TotalHigh
+        [Int]$TotalMedium
+        [Int]$TotalLow
+        [Int]$TotalInfo
 
     #endregion
     #------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1443,7 +1442,7 @@ class SeverityCount {
         $this.SetCounts($summary.containersCounters.severityCounters, $this.Containers)
 
         $this.Totals = @{
-            Total = $this.Total
+            total = $this.Total
             Critical = $this.TotalCritical
             High = $this.TotalHigh
             Medium = $this.TotalMedium
