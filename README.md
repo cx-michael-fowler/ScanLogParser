@@ -13,7 +13,6 @@ Has seperate tabs for
  - General Queries
 
 ## Notes: 
-- When uploading a log file downloaded from Checkmarx One please use the -cxOne switch to ensure it is parsed correctly
 - The CXOneAPIModule folder needs to be placed into the same location as the script in order to use the Scan ID function
 - Excel created is not saved and must be manually saved if required
 
@@ -22,7 +21,7 @@ Has seperate tabs for
     .\ScanLogParser.ps1 -help [<CommonParameters>]
     
 ### Parse Log File
-    .\ScanLogParser.ps1 -logPath <string> [-cxOne] [<CommonParameters>]
+    .\ScanLogParser.ps1 -logPath <string> [<CommonParameters>]
 
 ### Parse Log from Checkmarx One Scan ID
     .\ScanLogParser.ps1 -scanId <string> [-silentLogin -apiKey <string] [<CommonParameters>]
@@ -33,9 +32,6 @@ Display help
 
 __PARAMETER logPath__  
 The file path for the Scan Log to be processed. Use when parsing a downloaded log file
-
-__PARAMETER cxOne__  
-Switch to specifify log has been downloaded from CxOne
 
 __PARAMETER scanId__  
 A Checkmarx One Scan ID which will be used to retrieve the SAST log
