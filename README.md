@@ -11,6 +11,7 @@ Has seperate tabs for
  - Files Processed
  - Results Summary
  - General Queries
+ - Errors
 
 ## Notes: 
 - The CXOneAPIModule folder needs to be placed into the same location as the script in order to use the Scan ID function
