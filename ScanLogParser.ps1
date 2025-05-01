@@ -24,8 +24,8 @@ Parse Log from Checkmarx One Scan ID
     .\ScanLogParser.ps1 -scanId <string> [-silentLogin -apiKey <string] [<CommonParameters>]
 
 .Notes
-Version:     2.0
-Date:        21/03/2025
+Version:     2.2
+Date:        01/05/2025
 Written by:  Michael Fowler
 Contact:     michael.fowler@checkmarx.com
 
@@ -35,6 +35,7 @@ Version    Detail
 1.0        Original version
 2.0        Added functionality to download log from Checkmarx One using given Scan ID
 2.1        Updated Parsing of General Queries and Results Summary
+2.2        Minor bug fixes
   
 .PARAMETER help
 Display help
@@ -141,7 +142,7 @@ Begin {
         
         ResultsSummary ([String] $line) {
 
-            $line -match "(.*)\s{2,}Severity:\s(.*)\s{2,}(\D+)Results:\s(.*)\s{2,}Duration\s=\s(\d\d:\d\d:\d\d\.\d\d\d)\s{2,}(.*)\s{2,}CxDescription.*"
+            $line -match "(.*)\s{2,}Severity:\s(.*)\s{2,}(\D+)Results:\s(.*)\s{1,}Duration\s=\s(\d\d:\d\d:\d\d\.\d\d\d)\s{2,}(.*)\s{2,}CxDescrip.ion.*"
             $this.Query = $Matches[1]
             $this.Severity = $Matches[2]
             $this.Status = $Matches[3]
@@ -343,7 +344,7 @@ Begin {
             if ($i -eq 0) { $details.Start = [datetime]::parseexact($lines[$i].substring(0,23), 'dd/MM/yyyy HH:mm:ss,FFF', $null) }
 
             #Version
-            if ($i -eq 1) { $details.Version = $lines[$i].substring(17,7) }
+            if ($i -eq 1 -and $lines[$i].Length -gt 17) { $details.Version = $lines[$i].substring(17,7) }
 
             #Available Memory
             if ($lines[$i] -match "^Used memory: (.*)") { $details.AvailableMemory = $Matches[1] }
