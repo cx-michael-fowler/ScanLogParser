@@ -6,8 +6,8 @@
     This module has been created to simplify common tasks when scritpting for Checkmarx One
 
 .Notes   
-    Version:     5.3
-    Date:        10/03/2025
+    Version:     5.5
+    Date:        07/04/2025
     Written by:  Michael Fowler
     Contact:     michael.fowler@checkmarx.com
     
@@ -31,6 +31,8 @@
     5.1        Added Applications Id String to project object
     5.2        Added Projects IDs string to applications
     5.3        Bug Fix
+    5.4        Made IAM Url string available in the CxConnection Object
+    5.5        Made Tenant string available in the CxConnection Object
 
 .Description
     The following functions are available for this module
@@ -409,6 +411,8 @@ class CxOneConnection {
 
     #Connection Variables
     [string]$BaseURI
+    [string] $IamUri
+    [string]$Tenant
     [HashTable]$Headers
 
     #endregion
@@ -425,7 +429,6 @@ class CxOneConnection {
     
     #Connection Detail for retry
     Hidden [string] $ApiKey
-    Hidden [string] $IamUri
     Hidden [datetime]$TokenExpiry
 
     #endregion
@@ -479,10 +482,10 @@ class CxOneConnection {
         }
         $uri = [System.Uri]$apiToken.aud
         $this.IamUri = "https://" + $uri.Host
-        $tenant = ($uri.AbsolutePath -split "/")[3]
+        $this.Tenant = ($uri.AbsolutePath -split "/")[3]
         
         #Get Access Token, parse the token and set Base URL if successfull
-        if (-not ($accessToken = $this.SetHeaders($this.IamUri, $tenant, $this.ApiKey, $true))) { 
+        if (-not ($accessToken = $this.SetHeaders($this.IamUri, $this.Tenant, $this.ApiKey, $true))) { 
             Write-Host "Unable to log on using API Key provided" -f Red
             Write-Host "PLease check the API Key and try again" -f Red
             throw "Invalid API Key Provided"
@@ -511,7 +514,7 @@ class CxOneConnection {
         $this.mainForm.Icon = [System.Drawing.Icon]::FromHandle(([System.Drawing.Bitmap]::New($stream)).GetHIcon())
         $stream.Dispose()
     
-        # Base Region texbox Label
+        # Base texbox Label
         $lblBaseUri = [System.Windows.Forms.Label]::New()
         $lblBaseUri.Text = "Base URL"
         $lblBaseUri.Location = [System.Drawing.Point]::New(15,20)
@@ -582,6 +585,7 @@ class CxOneConnection {
             $cd.BaseUri = $keyToken."ast-base-url"
             $cd.ApiKey = $cd.txtAPIKey.Text.Trim()
             $cd.IamUri = $cd.txtIamUri.Text
+            $cd.Tenant = $cd.txtTenant.Text
             $cd.TokenExpiry = ([DateTime]('1970,1,1')).AddSeconds($keyToken."exp")
             
             $cd.btnOK.Enabled = $true
