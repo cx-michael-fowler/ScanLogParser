@@ -6,8 +6,8 @@
     This module has been created to simplify common tasks when scritpting for Checkmarx One
 
 .Notes   
-    Version:     5.5
-    Date:        07/04/2025
+    Version:     6.0
+    Date:        29/05/2025
     Written by:  Michael Fowler
     Contact:     michael.fowler@checkmarx.com
     
@@ -33,6 +33,8 @@
     5.3        Bug Fix
     5.4        Made IAM Url string available in the CxConnection Object
     5.5        Made Tenant string available in the CxConnection Object
+    5.6        Bug fix in Applications classes
+    6.0        Expaned results classes to allow for different engine types
 
 .Description
     The following functions are available for this module
@@ -953,13 +955,15 @@ class Application {
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Constructors
 
-    Application ([PSCustomObject]$application) { $this.SetVariables($application) }
+    Application ([PSCustomObject]$application, [System.Collections.Generic.Dictionary[String, Project]]$projects) { 
+        $this.SetVariables($application, $projects) 
+    }
 
     #endregion
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Hidden Methods
     
-    [void] Hidden SetVariables([PSCustomObject]$application) {
+    [void] Hidden SetVariables([PSCustomObject]$application, [System.Collections.Generic.Dictionary[String, Project]]$projects) {
            
         $this.ApplicationID = $application.id        
         $this.ApplicationName = $application.name
@@ -988,7 +992,10 @@ class Application {
         try { $this.ProjectIdsString = ($application.projectIds) -join ";" }
         catch { $this.ProjectIdsString = $null }
 
-        $this.ProjectNames = ($application.rules | Where-Object { $_.type -eq "project.name.in" } | select-object -First 1).value
+        foreach ($pid in $application.projectIds) {
+            if (-NOT [String]::IsNullOrEmpty($this.ProjectNames)) { $this.ProjectNames += ";" }
+            $this.ProjectNames += $projects[$pid].ProjectName
+        }
     }
 
     #endregion    
@@ -1024,7 +1031,9 @@ class Applications {
 
     [void] Hidden GetApplicationsHash([CxOneConnection]$conn) {
         
-        Write-Verbose "Retrieving projects"
+        Write-Verbose "Retrieving Applications"
+
+        $projects = Get-AllProjects $conn
 
         $this.Offset = 0
         $this.ApplicationsHash = [System.Collections.Generic.Dictionary[String, Application]]::New()
@@ -1044,7 +1053,7 @@ class Applications {
                 $this.TotalCount = $json.totalCount   
             }
 
-            foreach ($app in $json.applications) { $this.ApplicationsHash.Add($app.id, [Application]::new($app)) }
+            foreach ($app in $json.applications) { $this.ApplicationsHash.Add($app.id, [Application]::new($app, $projects)) }
 
             Write-Verbose "$($this.Limit) Applications Retrieved with Offset: $($this.Offset)"
             $this.Offset += $this.Limit
@@ -1268,19 +1277,18 @@ class Result {
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Variables
     
-   [string]$Type
+    [string]$Type
+    [string]$Id
 	[string]$SimilarityId
+    [string]$AlternateId
 	[string]$Status
 	[string]$State
 	[string]$Severity
 	[Nullable[datetime]]$Created
 	[Nullable[datetime]]$FirstFoundAt
 	[DateTime]$FoundAt
-	[string]$Description
-	[string]$QueryName
-	[string]$Group
-	[string]$LanguageName
-	[string]$CweId
+	[string]$FirstScanID
+    [string]$Description
 
     #endregion
     #------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1288,15 +1296,16 @@ class Result {
 
     Result() {}
 
-    Result ([PSCustomObject]$result) { $this.SetVariables($result) }
+    Result ([PSCustomObject]$result) { $this.SetCommonVariables($result) }
 
     #endregion
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Hidden Methods
     
-    [void] Hidden SetVariables([PSCustomObject]$result) {
+    [void] Hidden SetCommonVariables([PSCustomObject]$result) {
            
         $this.Type = $result.type
+        $this.Id = $result.id
         $this.SimilarityId = $result.similarityId
         $this.Status = $result.status
         $this.State = $result.state
@@ -1311,11 +1320,255 @@ class Result {
         try { $this.FoundAt = [DateTime]$result.foundAt }
         catch {}
 
+        $this.FirstScanID = $result.firstScanId
         $this.Description = $result.description
+    }
+
+    #endregion    
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+}
+
+class SastResult : Result {
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Variables
+    
+    [string]$QueryName
+    [string]$QueryGroup
+    [string]$LanguageName
+    [string]$CweId
+    [string]$Compliances
+  
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Constructors
+    
+    SastResult() {}
+
+    SastResult ([PSCustomObject]$result): base($result) { $this.SetVariables($result) }
+
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Hidden Methods
+    
+    [void] Hidden SetVariables([PSCustomObject]$result) {
         $this.QueryName = $result.data.queryName
-        $this.Group = $result.data.group
+        $this.QueryGroup = $result.data.group
         $this.LanguageName = $result.data.languageName
         $this.CweId = $result.vulnerabilityDetails.cweId
+        $this.Compliances = $result.vulnerabilityDetails.compliances -join ";"
+    }
+
+    #endregion    
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+}
+
+class KicsResult : Result {
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Variables
+    
+    [string]$QueryName
+    [string]$QueryGroup
+    [string]$QueryUrl
+    [string]$FileName
+    [string]$Line
+    [string]$Platform
+    [string]$IssueType
+    [string]$ExpectedValue
+    [string]$Value
+  
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Constructors
+    
+    KicsResult() {}
+
+    KicsResult ([PSCustomObject]$result): base($result) { $this.SetVariables($result) }
+
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Hidden Methods
+    
+    [void] Hidden SetVariables([PSCustomObject]$result) {
+        $this.QueryName = $result.data.queryName
+        $this.QueryGroup = $result.data.group
+        $this.QueryUrl = $result.data.queryUrl
+        $this.FileName = $result.data.fileName
+        $this.Line = $result.data.line
+        $this.QueryUrl = $result.data.platform
+        $this.IssueType = $result.data.issueType
+        $this.ExpectedValue = $result.data.expectedValue
+        $this.Value = $result.data.value        
+    }
+
+    #endregion    
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+}
+
+class ContainerResult : Result {
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Variables
+    
+    [string]$PackageName
+    [string]$PackageVersion
+    [string]$ImageName
+    [string]$ImageTag
+    [string]$ImageFilePath
+    [string]$ImageOrigin
+    [string]$CvssScore
+    [string]$CveName
+    [string]$CweId
+    [string]$CvssScope
+    [string]$CvssSeverity
+    [string]$CvssAttackVector
+    [string]$CvssIntegrityImpact
+    [string]$CvssUserInteraction
+    [string]$CvssAttackComplexity
+    [string]$CvssAvailabilityImpact  
+    [string]$CvssPrivilegesRequired
+    [string]$CvssConfidentialityImpact     
+  
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Constructors
+    
+    ContainerResult() {}
+
+    ContainerResult ([PSCustomObject]$result): base($result) { $this.SetVariables($result) }
+
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Hidden Methods
+    
+    [void] Hidden SetVariables([PSCustomObject]$result) {
+        $this.PackageName = $result.data.packageName
+        $this.PackageVersion = $result.data.packageVersion
+        $this.ImageName = $result.data.imageName
+        $this.ImageTag = $result.data.imageTag
+        $this.ImageFilePath = $result.data.imageFilePath
+        $this.ImageOrigin = $result.data.imageOrigin
+        $this.IssueType = $result.data.issueType
+        $this.CvssScore = $result.vulnerabilityDetails.cvssScore
+        $this.CveName = $result.vulnerabilityDetails.cveName
+        $this.CweId = $result.vulnerabilityDetails.cweId
+        $this.CvssScope = $result.vulnerabilityDetails.cvssScope
+        $this.CvssScore = $result.vulnerabilityDetails.cvssScore
+        $this.CveName = $result.vulnerabilityDetails.cveName
+        $this.CvssScope = $result.vulnerabilityDetails.cvss.scope
+        $this.CvssSeverity = $result.vulnerabilityDetails.cvss.severity
+        $this.CvssAttackVector = $result.vulnerabilityDetails.cvss.attack_vector
+        $this.CvssIntegrityImpact = $result.vulnerabilityDetails.cvss.integrity_impact
+        $this.CvssUserInteraction = $result.vulnerabilityDetails.cvss.user_interaction
+        $this.CvssAttackComplexity = $result.vulnerabilityDetails.cvss.attack_complexity
+        $this.CvssAvailabilityImpact = $result.vulnerabilityDetails.cvss.availability_impact
+        $this.CvssPrivilegesRequired = $result.vulnerabilityDetails.cvss.privileges_required
+        $this.CvssConfidentialityImpact = $result.vulnerabilityDetails.cvss.confidentiality_impact
+    }
+
+    #endregion    
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+}
+
+class ScaResult : Result {
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Variables
+    
+    [string]$PackageIdentifier
+    [string]$PublishedAt
+    [string]$Recommendations
+    [string]$RecommendedVersion
+    [string]$ExploitableMethods
+    [string]$ImageOrigin
+    [string]$CvssScore
+    [string]$CveName
+    [string]$CweId
+    [string]$CvssScope
+    [string]$CvssSeverity
+    [string]$CvssAttackVector
+    [string]$CvssIntegrityImpact
+    [string]$CvssUserInteraction
+    [string]$CvssAttackComplexity
+    [string]$CvssAvailabilityImpact  
+    [string]$CvssPrivilegesRequired
+    [string]$CvssConfidentialityImpact
+  
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Constructors
+    
+    ScaResult() {}
+
+    ScaResult ([PSCustomObject]$result): base($result) { $this.SetVariables($result) }
+
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Hidden Methods
+    
+    [void] Hidden SetVariables([PSCustomObject]$result) {
+        $this.PackageName = $result.data.packageName
+        $this.PackageVersion = $result.data.packageVersion
+        $this.ImageName = $result.data.imageName
+        $this.ImageTag = $result.data.imageTag
+        $this.ImageFilePath = $result.data.imageFilePath
+        $this.ImageOrigin = $result.data.imageOrigin
+        $this.IssueType = $result.data.issueType
+        $this.CvssScore = $result.vulnerabilityDetails.cvssScore
+        $this.CveName = $result.vulnerabilityDetails.cveName
+        $this.CweId = $result.vulnerabilityDetails.cweId
+        $this.CvssScope = $result.vulnerabilityDetails.cvssScope
+        $this.CvssSeverity = $result.vulnerabilityDetails.cvss.severity
+        $this.CvssAttackVector = $result.vulnerabilityDetails.cvss.attack_vector
+        $this.CvssIntegrityImpact = $result.vulnerabilityDetails.cvss.integrity_impact
+        $this.CvssUserInteraction = $result.vulnerabilityDetails.cvss.user_interaction
+        $this.CvssAttackComplexity = $result.vulnerabilityDetails.cvss.attack_complexity
+        $this.CvssAvailabilityImpact = $result.vulnerabilityDetails.cvss.availability_impact
+        $this.CvssPrivilegesRequired = $result.vulnerabilityDetails.cvss.privileges_required
+        $this.CvssConfidentialityImpact = $result.vulnerabilityDetails.cvss.confidentiality_impact
+    }
+
+    #endregion    
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+}
+
+class SscsResult : Result {
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Variables
+    
+    [string]$RuleId
+    [string]$RuleName
+    [string]$FileName
+    [string]$Line
+    [string]$Snippet
+    [string]$SlsaStep
+    [string]$RuleDescription
+    [string]$Remediation
+    [string]$RemediationLink
+    [string]$RemediationAdditional
+    [string]$Validity
+  
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Constructors
+    
+    SscsResult() {}
+
+    SscsResult ([PSCustomObject]$result): base($result) { $this.SetVariables($result) }
+
+    #endregion
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Hidden Methods
+    
+    [void] Hidden SetVariables([PSCustomObject]$result) {
+        $this.RuleId = $result.data.ruleId
+        $this.RuleName = $result.data.ruleName
+        $this.FileName = $result.data.fileName
+        $this.Line = $result.data.line
+        $this.Snippet = $result.data.snippet
+        $this.SlsaStep = $result.data.slsaStep
+        $this.RuleDescription = $result.data.ruleDescription
+        $this.Remediation = $result.data.remediation
+        $this.RemediationLink = $result.data.remediationLink
+        $this.RemediationAdditional = $result.data.remediationAdditional
+        $this.Validity = $result.data.validity        
     }
 
     #endregion    
@@ -1364,7 +1617,17 @@ Class Results {
         
             if ($this.Offset -eq 0) { $this.TotalCount = $response.totalCount }
 
-            foreach ($r in $response.results) { $this.ResultsList.Add([Result]::new($r)) }
+            foreach ($r in $response.results) { 
+                switch ($r.type) {
+                    "sast" { $this.ResultsList.Add([SastResult]::new($r)) }
+                    "kics" { $this.ResultsList.Add([KicsResult]::new($r)) }
+                    "containers" { $this.ResultsList.Add([ContainerResult]::new($r)) }
+                    "sca" { $this.ResultsList.Add([ScaResult]::new($r)) }
+                    "sscs-scorecard" { $this.ResultsList.Add([SscsResult]::new($r)) }
+                    "sscs-secret-detection" { $this.ResultsList.Add([SscsResult]::new($r)) }
+                    default { $this.ResultsList.Add([Result]::new($r)) }
+                }
+            }
 
             Write-Verbose "$($this.Limit) Results Retrieved with Offset: $($this.Offset)"
             $this.Offset++
