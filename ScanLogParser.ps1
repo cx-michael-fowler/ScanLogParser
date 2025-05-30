@@ -24,8 +24,8 @@ Parse Log from Checkmarx One Scan ID
     .\ScanLogParser.ps1 -scanId <string> [-silentLogin -apiKey <string] [<CommonParameters>]
 
 .Notes
-Version:     3.0
-Date:        01/05/2025
+Version:     3.1
+Date:        30/05/2025
 Written by:  Michael Fowler
 Contact:     michael.fowler@checkmarx.com
 
@@ -37,6 +37,7 @@ Version    Detail
 2.1        Updated Parsing of General Queries and Results Summary
 2.2        Minor bug fixes
 3.0        Add worksheet for Errors
+3.1        Minor bug fix in formatting
   
 .PARAMETER help
 Display help
@@ -75,6 +76,7 @@ Param (
     [switch]$silentLogin
 
 )
+
 #endregion
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------
 #region Dynamic Parameters
@@ -156,6 +158,7 @@ Begin {
         #endregion
         #------------------------------------------------------------------------------------------------------------------------------------------------------
     }
+    
     #endregion
     #----------------------------------------------------------------------------------------------------------------------------------------------------------
     #region Error Class
@@ -186,6 +189,7 @@ Begin {
         #endregion
         #------------------------------------------------------------------------------------------------------------------------------------------------------
     }
+    
     #endregion
     #----------------------------------------------------------------------------------------------------------------------------------------------------------
     #region General Query Class
@@ -517,7 +521,7 @@ Begin {
         Write-Verbose "Writing data to worksheet"
         
         WriteGeneralDetailsToExcel $worksheet
-        WriteParingSummaryToExcel $worksheet
+        WriteParsingSummaryToExcel $worksheet
         if ($scanId) { WriteCxOneDetailsToExcel $worksheet $metadata $scan }
        
         #Auto-fit columns
@@ -550,7 +554,8 @@ Begin {
         #Total Run time
         $worksheet.Range("A4") = "Total Run Time"
         $worksheet.Range("A4").Font.Bold=$True
-        $worksheet.Range("B4") = $details.Runtime.ToString("hh\:mm\:ss\:fff")
+        if ([string]::IsNullOrEmpty($details.Runtime)) { $worksheet.Range("B4") = "" }
+        else { $worksheet.Range("B4") = $details.Runtime.ToString("hh\:mm\:ss\:fff") }
 
         #Version
         $worksheet.Range("A5") = "Version"
@@ -602,7 +607,7 @@ Begin {
         $worksheet.Range("A1:B13").Borders.LineStyle = 1
     }
 
-    Function WriteParingSummaryToExcel {
+    Function WriteParsingSummaryToExcel {
         Param (
             [Microsoft.Office.Interop.Excel.Worksheet]$worksheet
         )
@@ -757,8 +762,8 @@ Begin {
             $worksheet.Range("A$i") = $phase.PhaseName
             $worksheet.Range("B$i") = $phase.Start
             $worksheet.Range("C$i") = $phase.End
-            try { $worksheet.Range("D$i") = $phase.Runtime.ToString("hh\:mm\:ss\:fff") }
-            catch { $worksheet.Range("D$i") = "" }
+            if ([String]::IsNullOrEmpty($phase.Runtime)) { $worksheet.Range("D$i") = "" }
+            else { $worksheet.Range("D$i") = $phase.Runtime.ToString("hh\:mm\:ss\:fff") }
             $i++
         }
 
@@ -766,7 +771,12 @@ Begin {
         $i--
         $worksheet.Range("A1:D$i").HorizontalAlignment = -4131 #Align Left
         $worksheet.Range("A1:D$i").Borders.LineStyle = 1
-        [void]$worksheet.ListObjects.Add([Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange,$worksheet.Range("A1:D$i"))
+        [void]$worksheet.ListObjects.Add(
+            [Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange,
+            $worksheet.Range("A1:D$i"),
+            $null, 
+            [Microsoft.Office.Interop.Excel.XlYesNoGuess]::xlYes
+        )
         [void]$worksheet.UsedRange.Cells.EntireColumn.AutoFit()
     
         Write-Verbose 'Completed writing data to worksheet "Phases"'
@@ -796,8 +806,8 @@ Begin {
             $worksheet.Range("A$i") = $file.FileName
             $worksheet.Range("B$i") = $file.Start
             $worksheet.Range("C$i") = $file.End
-            try { $worksheet.Range("D$i") = $file.Runtime.ToString("hh\:mm\:ss\:fff") }
-            catch { $worksheet.Range("D$i") = "" }
+            if ([String]::IsNullOrEmpty($file.Runtime)) { $worksheet.Range("D$i") = "" }
+            else { $worksheet.Range("D$i") = $file.Runtime.ToString("hh\:mm\:ss\:fff") }
             $i++
         }
     
@@ -805,14 +815,20 @@ Begin {
         $i--
         $worksheet.Range("A1:D$i").HorizontalAlignment = -4131 #Align Left
         $worksheet.Range("A1:D$i").Borders.LineStyle = 1
-        [void]$worksheet.ListObjects.Add([Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange,$worksheet.Range("A1:D$i"))
+        [void]$worksheet.ListObjects.Add(
+            [Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange,
+            $worksheet.Range("A1:D$i"),
+            $null, 
+            [Microsoft.Office.Interop.Excel.XlYesNoGuess]::xlYes
+        )
         [void]$worksheet.UsedRange.Cells.EntireColumn.AutoFit()
+        $worksheet.Range("A1:D$i").WrapText = $true
     
         Write-Verbose 'Completed writing data to worksheet "Files Processed"'
     }
 
     Function WriteSummaryToExcel {
-
+       
         Write-Verbose "Creating Results Summary worksheet" 
     
         $worksheet = $workbook.Worksheets.Add()
@@ -849,14 +865,19 @@ Begin {
         $worksheet.Range("A1:F$i").HorizontalAlignment = -4131 #Align Left
         $worksheet.Range("D1:D$i").HorizontalAlignment = -4108 #Align Center
         $worksheet.Range("A1:F$i").Borders.LineStyle = 1
-        [void]$worksheet.ListObjects.Add([Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange,$worksheet.Range("A1:F$i"))
+        [void]$worksheet.ListObjects.Add(
+            [Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange,
+            $worksheet.Range("A1:F$i"), 
+            $null, 
+            [Microsoft.Office.Interop.Excel.XlYesNoGuess]::xlYes
+        )
         [void]$worksheet.UsedRange.Cells.EntireColumn.AutoFit()
     
         Write-Verbose 'Completed writing data to worksheet "Results Summary"'
     }
 
     Function WriteGeneralToExcel {
-    
+            
         Write-Verbose "Creating Results Summary worksheet" 
     
         $worksheet = $workbook.Worksheets.Add()
@@ -888,14 +909,19 @@ Begin {
         $worksheet.Range("A1:D$i").HorizontalAlignment = -4131 #Align Left
         $worksheet.Range("C1:C$i").HorizontalAlignment = -4108 #Align Center
         $worksheet.Range("A1:D$i").Borders.LineStyle = 1
-        [void]$worksheet.ListObjects.Add([Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange,$worksheet.Range("A1:D$i"))
+        [void]$worksheet.ListObjects.Add(
+            [Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange,
+            $worksheet.Range("A1:D$i"),
+            $null, 
+            [Microsoft.Office.Interop.Excel.XlYesNoGuess]::xlYes
+        )
         [void]$worksheet.UsedRange.Cells.EntireColumn.AutoFit()
     
         Write-Verbose 'Completed writing data to worksheet "General Queries"'
     }
 
     Function WriteErrorsToExcel {
-
+        
         Write-Verbose "Creating Errors worksheet" 
     
         $worksheet = $workbook.Worksheets.Add()
@@ -920,7 +946,6 @@ Begin {
             catch { $worksheet.Range("B$i") = "" }
             $worksheet.Range("C$i") = $error.Location
             $worksheet.Range("D$i") = $error.Message
-
             $i++
         }
     
@@ -928,8 +953,14 @@ Begin {
         $i--
         $worksheet.Range("A1:D$i").HorizontalAlignment = -4131 #Align Left
         $worksheet.Range("A1:D$i").Borders.LineStyle = 1
-        [void]$worksheet.ListObjects.Add([Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange,$worksheet.Range("A1:D$i"))
+        [void]$worksheet.ListObjects.Add(
+            [Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange,
+            $worksheet.Range("A1:D$i"),
+            $null, 
+            [Microsoft.Office.Interop.Excel.XlYesNoGuess]::xlYes
+        )
         [void]$worksheet.UsedRange.Cells.EntireColumn.AutoFit()
+        $worksheet.Range("A1:D$i").WrapText = $true
     
         Write-Verbose 'Completed writing data to worksheet "Errors"'
     }
@@ -959,10 +990,14 @@ Begin {
         $i--
         $worksheet.Range("A1:B$i").HorizontalAlignment = -4131 #Align Left
         $worksheet.Range("A1:B$i").Borders.LineStyle = 1
-        [void]$worksheet.ListObjects.Add([Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange, 
-                                   $worksheet.Range("A1:B$i"), $null, 
-                                   [Microsoft.Office.Interop.Excel.XlYesNoGuess]::xlYes)
+        [void]$worksheet.ListObjects.Add(
+            [Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange, 
+            $worksheet.Range("A1:B$i"), 
+            $null, 
+            [Microsoft.Office.Interop.Excel.XlYesNoGuess]::xlYes
+        )
         [void]$worksheet.UsedRange.Cells.EntireColumn.AutoFit()
+        $worksheet.Range("A1:B$i").WrapText = $true
     
         Write-Verbose 'Completed writing data to worksheet "Predefined File Exclusions"'
     }
@@ -992,10 +1027,14 @@ Begin {
         $i--
         $worksheet.Range("A1:B$i").HorizontalAlignment = -4131 #Align Left
         $worksheet.Range("A1:B$i").Borders.LineStyle = 1
-        [void]$worksheet.ListObjects.Add([Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange, 
-                                   $worksheet.Range("A1:B$i"), $null, 
-                                   [Microsoft.Office.Interop.Excel.XlYesNoGuess]::xlYes)
+        [void]$worksheet.ListObjects.Add(
+            [Microsoft.Office.Interop.Excel.XlListObjectSourceType]::xlSrcRange, 
+            $worksheet.Range("A1:B$i"), 
+            $null, 
+            [Microsoft.Office.Interop.Excel.XlYesNoGuess]::xlYes
+        )
         [void]$worksheet.UsedRange.Cells.EntireColumn.AutoFit()
+        $worksheet.Range("A1:B$i").WrapText = $true
     
         Write-Verbose 'Completed writing data to worksheet "Predefined File Exclusions"'
     }
