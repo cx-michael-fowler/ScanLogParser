@@ -35,6 +35,7 @@
     5.5        Made Tenant string available in the CxConnection Object
     5.6        Bug fix in Applications classes
     6.0        Expaned results classes to allow for different engine types
+    6.1        Bug Fix
 
 .Description
     The following functions are available for this module
@@ -1414,10 +1415,11 @@ class ContainerResult : Result {
     [string]$ImageTag
     [string]$ImageFilePath
     [string]$ImageOrigin
-    [string]$CvssScore
+    [string]$Score
     [string]$CveName
     [string]$CweId
     [string]$CvssScope
+    [string]$CvssScore
     [string]$CvssSeverity
     [string]$CvssAttackVector
     [string]$CvssIntegrityImpact
@@ -1446,14 +1448,13 @@ class ContainerResult : Result {
         $this.ImageTag = $result.data.imageTag
         $this.ImageFilePath = $result.data.imageFilePath
         $this.ImageOrigin = $result.data.imageOrigin
-        $this.IssueType = $result.data.issueType
+        
         $this.CvssScore = $result.vulnerabilityDetails.cvssScore
         $this.CveName = $result.vulnerabilityDetails.cveName
         $this.CweId = $result.vulnerabilityDetails.cweId
-        $this.CvssScope = $result.vulnerabilityDetails.cvssScope
-        $this.CvssScore = $result.vulnerabilityDetails.cvssScore
-        $this.CveName = $result.vulnerabilityDetails.cveName
+        
         $this.CvssScope = $result.vulnerabilityDetails.cvss.scope
+        $this.CvssScore = $result.vulnerabilityDetails.cvss.score      
         $this.CvssSeverity = $result.vulnerabilityDetails.cvss.severity
         $this.CvssAttackVector = $result.vulnerabilityDetails.cvss.attack_vector
         $this.CvssIntegrityImpact = $result.vulnerabilityDetails.cvss.integrity_impact
@@ -1477,19 +1478,22 @@ class ScaResult : Result {
     [string]$Recommendations
     [string]$RecommendedVersion
     [string]$ExploitableMethods
-    [string]$ImageOrigin
-    [string]$CvssScore
+
+    [string]$Score
     [string]$CveName
     [string]$CweId
     [string]$CvssScope
+    [string]$CvssScore
+    [string]$CvssVersion
     [string]$CvssSeverity
+    [string]$CvssIntegrity
     [string]$CvssAttackVector
-    [string]$CvssIntegrityImpact
+    [string]$CvssAvailability
+    [string]$CvssConfidentiality
     [string]$CvssUserInteraction
     [string]$CvssAttackComplexity
-    [string]$CvssAvailabilityImpact  
     [string]$CvssPrivilegesRequired
-    [string]$CvssConfidentialityImpact
+    
   
     #endregion
     #------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1504,25 +1508,32 @@ class ScaResult : Result {
     #region Hidden Methods
     
     [void] Hidden SetVariables([PSCustomObject]$result) {
-        $this.PackageName = $result.data.packageName
-        $this.PackageVersion = $result.data.packageVersion
-        $this.ImageName = $result.data.imageName
-        $this.ImageTag = $result.data.imageTag
-        $this.ImageFilePath = $result.data.imageFilePath
-        $this.ImageOrigin = $result.data.imageOrigin
-        $this.IssueType = $result.data.issueType
-        $this.CvssScore = $result.vulnerabilityDetails.cvssScore
+        $this.PackageIdentifier = $result.data.packageIdentifier
+        
+        try { $this.PublishedAt = [DateTime]$result.data.publishedAt }
+        catch {}
+        
+        $this.Recommendations = $result.data.recommendations
+        $this.RecommendedVersion = $result.data.recommendedVersion
+        
+        if ($null -eq $result.data.exploitableMethods) { $this.ExploitableMethods = "false" }
+        else { $this.ExploitableMethods = "true" }
+        
+        $this.Score = $result.vulnerabilityDetails.cvssScore
         $this.CveName = $result.vulnerabilityDetails.cveName
         $this.CweId = $result.vulnerabilityDetails.cweId
-        $this.CvssScope = $result.vulnerabilityDetails.cvssScope
+        
+        $this.CvssScope = $result.vulnerabilityDetails.cvss.scope
+        $this.CvssScore = $result.vulnerabilityDetails.Cvss.score
+        $this.CvssVersion = $result.vulnerabilityDetails.Cvss.version
         $this.CvssSeverity = $result.vulnerabilityDetails.cvss.severity
-        $this.CvssAttackVector = $result.vulnerabilityDetails.cvss.attack_vector
-        $this.CvssIntegrityImpact = $result.vulnerabilityDetails.cvss.integrity_impact
-        $this.CvssUserInteraction = $result.vulnerabilityDetails.cvss.user_interaction
-        $this.CvssAttackComplexity = $result.vulnerabilityDetails.cvss.attack_complexity
-        $this.CvssAvailabilityImpact = $result.vulnerabilityDetails.cvss.availability_impact
-        $this.CvssPrivilegesRequired = $result.vulnerabilityDetails.cvss.privileges_required
-        $this.CvssConfidentialityImpact = $result.vulnerabilityDetails.cvss.confidentiality_impact
+        $this.CvssIntegrity = $result.vulnerabilityDetails.cvss.integrity
+        $this.CvssAttackVector = $result.vulnerabilityDetails.cvss.attackVector
+        $this.CvssAvailability = $result.vulnerabilityDetails.cvss.availability
+        $this.CvssConfidentiality = $result.vulnerabilityDetails.cvss.confidentiality 
+        $this.CvssUserInteraction = $result.vulnerabilityDetails.cvss.userInteraction
+        $this.CvssAttackComplexity = $result.vulnerabilityDetails.cvss.attackComplexity
+        $this.CvssPrivilegesRequired = $result.vulnerabilityDetails.cvss.privilegesRequired
     }
 
     #endregion    
