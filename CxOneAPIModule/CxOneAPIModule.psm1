@@ -6,8 +6,8 @@
     This module has been created to simplify common tasks when scritpting for Checkmarx One
 
 .Notes   
-    Version:     6.0
-    Date:        29/05/2025
+    Version:     7.3
+    Date:        18/06/2025
     Written by:  Michael Fowler
     Contact:     michael.fowler@checkmarx.com
     
@@ -36,6 +36,10 @@
     5.6        Bug fix in Applications classes
     6.0        Expaned results classes to allow for different engine types
     6.1        Bug Fix
+    7.0        Added Status details to the Scans classes
+    7.1        Bug Fix
+    7.2        Bug Fix
+    7.3        Modified last scan to return Project ID as key and include null values for projects with no scans
 
 .Description
     The following functions are available for this module
@@ -117,35 +121,42 @@
         Details
             Function to get a hash of scans filtered by statuses provided as a CSV string
             Key = Scan ID and Value = Scan Object 
-            Valid Statuses are Queued, Running, Completed, Failed, Partial, Canceled
-            All Statuses are required pass $null or empty string for statuses
+            Statuses = CSV of Scan statuses to filter results
+               Valid Statuses are Queued, Running, Completed, Failed, Partial, Canceled
+               If all Statuses are required use "All"
         Parameters
             CxOneConnObj - Checkmarx One connection object
             statuses - CSV string of scan statuses to filter results
         Example
-            $scans = Get-AllScans $conn "Completed,Partial"
+            $scans = Get-AllScans $conn "Completed","Partial"
             
     Get-AllScansByDays
         Details
             Function to get a hash of all scans filtered by statuses provided as a CSV string and number of days.
             Key = Scan ID and Value = Scan Object
-            Valid Statuses are Queued, Running, Completed, Failed, Partial, Canceled
-            If all Statuses are required pass $null or empty string for statuses
-            Number of days must be a integer greater or equal to 0. 0 will return all days
+            Statuses = CSV of Scan statuses to filter results
+               Valid Statuses are Queued, Running, Completed, Failed, Partial, Canceled
+               If all Statuses are required use "All"
+            ScanDays = Number of days to return scan for
+               Must be a integer greater or equal to 0 
+               0 will return all days
         Parameters
             CxOneConnObj - Checkmarx One connection object
-            statuses - CSV string of scan statuses to filter results
-            scanDays - Integer value between 0 and 366 to specifiy the number of days to return scan for. 0 returns all scans
+            Statuses - CSV string of scan statuses
+            scanDays - Integer value between 0 and 366
         Example
-            $scans = Get-AllScans $conn "Completed,Partial" 90
+            $scans = Get-AllScans $conn "Completed","Partial" 90
 
     Get-ScansByIds
         Details
             Function to get a hash scans for a provided as a CSV string of Scan IDs
             Key = Scan ID and Value = Scan Object
+            Statuses = CSV of Scan statuses to filter results
+               Valid Statuses are Queued, Running, Completed, Failed, Partial, Canceled
+               If all Statuses are required use "All
         Parameters
             CxOneConnObj - Checkmarx One connection object
-            statuses - CSV string of scan statuses to filter results
+            Statuses - CSV string of scan statuses
             ScanIds - CSV string of scan IDs
         Example
             $scans = Get-Get-ScansByIds $conn "All" "4bf2d7fc-8a7c-420d-ac1a-7c62cebb7bbb,141cf46f-1781-45ab-8cee-0f5856337b2f"
@@ -153,8 +164,9 @@
     Get-LastScans
         Details
             Get a hash of the the last scans for the projects provided in the projects hash.
-            Key = Scan ID and Value = Scan Object
+            Key = Project ID and Value = Scan Object
             Optional switch to return last scan for Main Branch (if set)
+            Will return null for projects with no scans
         Parameters
             CxOneConnObj - Checkmarx One connection object
             projectsHash - Hash of projects to return last of. Must be a hash as provided by call above
@@ -165,7 +177,7 @@
     Get-LastScansForGivenBranches
         Details
             Get a hash of the last scan for the projects provided in the projects hash.
-            Key = Scan ID and Value = Scan Object
+            Key = Project ID and Value = Scan Object
             Returns last scan for the branch provided in the CSV file
             branchesCSV must be a file path to a CSV with the header Projects,Branches and one project,branch per line
         Parameters
@@ -257,7 +269,7 @@ Function Get-ProjectsByNames {
         [CxOneConnection]$CxOneConnObj,
 
         [Parameter(Mandatory=$true)]
-        [AllowEmptyString()][String]$projectNames,
+        [String]$projectNames,
 
         [Parameter(Mandatory=$false)]
         [Switch]$getBranches
@@ -273,7 +285,6 @@ Function Get-ProjectsByIds {
         [CxOneConnection]$CxOneConnObj,
 
         [Parameter(Mandatory=$true)]
-        [AllowEmptyString()]
         [String]$projectIds,
 
         [Parameter(Mandatory=$false)]
@@ -293,38 +304,36 @@ Function Get-Applications {
     return ([Applications]::new($CxOneConnObj)).ApplicationsHash
 }
 
-#Get all scans filtered by CSV string of statuses. If all statuses are required pass $null or ""
+#Get all scans filtered by CSV string of statuses. If all statuses are required use "All" only for status
 Function Get-AllScans {
     Param(
         [Parameter(Mandatory=$true)]
         [CxOneConnection]$CxOneConnObj,
 
         [Parameter(Mandatory=$true)]
-        [AllowEmptyString()]
-        [String]$statuses
+        [ValidateSet("Queued", "Running", "Completed", "Failed", "Partial", "Canceled", "All", IgnoreCase = $false)]
+        [String[]]$statuses
     )
 
-    return ([Scans]::new($CxOneConnObj, $statuses, $null)).ScansHash
+    return ([Scans]::new($CxOneConnObj, $statuses -join ",", $null)).ScansHash
 }
 
-#Get all scans filtered by CSV string of statuses and number of days to return. If all statuses are required pass $null or ""
+#Get all scans filtered by CSV string of statuses and number of days to return. If all statuses are required "All" only for status
 Function Get-AllScansByDays {
     Param(
         [Parameter(Mandatory=$true)]
         [CxOneConnection]$CxOneConnObj,
 
         [Parameter(Mandatory=$true)]
-        [AllowEmptyString()]
         [ValidateSet("Queued", "Running", "Completed", "Failed", "Partial", "Canceled", "All", IgnoreCase = $false)]
-        [String]$statuses,
+        [String[]]$statuses,
 
         [Parameter(Mandatory=$true)]
-        [AllowEmptyString()]
         [ValidateRange(1,366)]
         [Int]$scanDays
     )
     
-    return ([Scans]::new($CxOneConnObj, $statuses, $scanDays)).ScansHash
+    return ([Scans]::new($CxOneConnObj, $statuses -join ",", $scanDays)).ScansHash
 }
 
 #Get scans filtered by status and scan Ids.
@@ -334,15 +343,14 @@ Function Get-ScansByIds {
         [CxOneConnection]$CxOneConnObj,
 
         [Parameter(Mandatory=$true)]
-        [AllowEmptyString()]
         [ValidateSet("Queued", "Running", "Completed", "Failed", "Partial", "Canceled", "All", IgnoreCase = $false)]
-        [String]$statuses,
+        [String[]]$statuses,
 
         [Parameter(Mandatory=$true)]
         [String]$scanIds
     )
     
-    return ([Scans]::new($CxOneConnObj, $statuses, $scanIds)).ScansHash
+    return ([Scans]::new($CxOneConnObj, $statuses -join ",", $scanIds)).ScansHash
 }
 
 #Get the last scan for the projects provided in the projects hash. 
@@ -1070,26 +1078,73 @@ class Applications {
 #----------------------------------------------------------------------------------------------------------------------------------------------------
 #region Scans
 
+Class Status {
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Variables
+
+    [String]$EngineName
+    [String]$Status
+    [String]$Details
+    [Nullable[Datetime]]$StartDate
+    [Nullable[Datetime]]$EndDate
+    [Nullable[Timespan]]$Runtime
+
+    #endregion    
+    #--------------------------------------------------------------------------------------------------------------------------------------
+    #region Constructors
+
+    Status() {}
+
+    Status ([System.Collections.IDictionary]$status) { $this.SetVariables($status) }
+
+    #endregion
+    #--------------------------------------------------------------------------------------------------------------------------------------
+    #region Hidden Methods
+
+    [void] Hidden SetVariables([System.Collections.IDictionary]$status) {
+        
+        $this.EngineName = $status.name
+        $this.Status = $status.status
+        $this.Details = $status.details
+        
+        try { $this.StartDate = [DateTime]$status.startDate }
+        catch {}
+
+        try { $this.EndDate = [DateTime]$status.endDate }
+        catch {}
+
+        try { $this.Runtime = New-TimeSpan –Start $this.StartDate –End $this.EndDate }
+        catch {}
+    }
+    
+    #endregion    
+    #------------------------------------------------------------------------------------------------------------------------------------------------
+}
+
 Class Scan {
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Variables
 
-    [string]$ScanID
-    [string]$ProjectId
-    [string]$ProjectName
-    [string]$Status
-    [string]$Branch
-    [string]$Loc
-    [Nullable[datetime]]$CreatedAt
-    [Nullable[datetime]]$UpdatedAt
+    [String]$ScanID
+    [String]$ProjectId
+    [String]$ProjectName
+    [String]$Status
+    [String]$Branch
+    [String]$Loc
+    [System.Collections.Generic.List[Status]]$Statuses
+    [Nullable[Datetime]]$CreatedAt
+    [Nullable[Datetime]]$UpdatedAt
+    [Nullable[Datetime]]$StartDate
+    [Nullable[Datetime]]$EndDate
+    [Nullable[Timespan]]$Runtime
     [Array]$Engines 
-    [string]$EnginesString
-    [string]$UserAgent
-    [string]$Initiator
+    [String]$EnginesString
+    [String]$UserAgent
+    [String]$Initiator
     [System.Collections.IDictionary]$Tags
-    [string]$TagsString
-    [string]$SourceType
-    [string]$SourceOrigin
+    [String]$TagsString
+    [String]$SourceType
+    [String]$SourceOrigin
 
     #endregion    
     #--------------------------------------------------------------------------------------------------------------------------------------
@@ -1111,7 +1166,22 @@ Class Scan {
         $this.Status = $scan.status
         $this.Branch = $scan.branch
         
-        $scan.statusDetails | ForEach-Object -Process { if ($_.loc) { $this.Loc = $_.loc } }
+        $this.Statuses = [System.Collections.Generic.List[Status]]::New()
+        Foreach ($status in $scan.statusDetails) { 
+            if ($status.name -eq "sast") { $this.Loc = $status.loc }
+            if ($status.name -eq "general") {
+                try { $this.StartDate = [DateTime]$status.startDate }
+                catch {}
+
+                try { $this.EndDate = [DateTime]$status.endDate }
+                catch {}
+
+                try { $this.Runtime = New-TimeSpan –Start $this.StartDate –End $this.EndDate }
+                catch {}
+            }
+            if ($status.name -ne "general") { $this.Statuses.Add([Status]::new($status)) 
+            }
+        }
 
         try { $this.CreatedAt = [DateTime]$scan.createdAt }
         catch {}
@@ -1169,10 +1239,10 @@ class Scans {
     #Get All Scans
     Scans() {}
     
-    # Get scnas with no filters
+    #Get scnas with no filters
     Scans([CxOneConnection]$conn) { $this.GetScansHash($conn, $null, $null, $null) }
 
-    #get Last scans for given hash of projects with option to filter by main branch
+    #Get Last scans for given hash of projects with option to filter by main branch
     Scans([CxOneConnection]$conn, [System.Collections.Generic.Dictionary[String, Project]]$projectsHash, [Switch]$useMainBranch, [String]$branchesCSV) { 
         $this.GetLastScansHash($conn , $projectsHash, $useMainBranch, $branchesCSV)
     }
@@ -1259,10 +1329,13 @@ class Scans {
             $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers } $conn
             $json = ([System.Web.Script.Serialization.JavaScriptSerializer]::New()).DeserializeObject($response)
             $scan = $json[$p.projectId]
-            $scan.Add("projectId", $p.projectId)
-            $scan.Add("projectName", $p.ProjectName)
+            if ($null -eq $scan) { $this.ScansHash.Add($p.projectId, $null) }
+            else { 
+                $scan.Add("projectId", $p.projectId)
+                $scan.Add("projectName", $p.ProjectName)
 
-            $this.ScansHash.Add($scan.id, [Scan]::new($scan)) 
+                $this.ScansHash.Add($p.projectId, [Scan]::new($scan))
+            } 
         }
     }
 
