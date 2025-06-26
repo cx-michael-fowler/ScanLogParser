@@ -24,8 +24,8 @@ Parse Log from Checkmarx One Scan ID
     .\ScanLogParser.ps1 -scanId <string> [-silentLogin -apiKey <string] [<CommonParameters>]
 
 .Notes
-Version:     3.1
-Date:        30/05/2025
+Version:     3.2
+Date:        26/06/2025
 Written by:  Michael Fowler
 Contact:     michael.fowler@checkmarx.com
 
@@ -38,6 +38,7 @@ Version    Detail
 2.2        Minor bug fixes
 3.0        Add worksheet for Errors
 3.1        Minor bug fix in formatting
+3.2        Modified to allow for changed format of logs
   
 .PARAMETER help
 Display help
@@ -151,7 +152,8 @@ Begin {
             $this.Severity = $Matches[2]
             $this.Status = $Matches[3]
             $this.Results = $Matches[4]
-            $this.Duration = [TimeSpan]::ParseExact($Matches[5], "hh\:mm\:ss\.fff", $null)
+            try { $this.Duration = [TimeSpan]::ParseExact($Matches[5], "hh\:mm\:ss\.fff", $null) }
+            catch {}
             $this.Cwe = $Matches[6]
         }
         
@@ -212,7 +214,8 @@ Begin {
             $this.Query = $out[0].Trim()
             $this.Status = $out[1].Trim()
             $this.Results = $out[2].Trim()
-            $this.Duration = [TimeSpan]::ParseExact($out[3].Trim(), "hh\:mm\:ss\.fff", $null)
+            try { $this.Duration = [TimeSpan]::ParseExact($out[3].Trim(), "hh\:mm\:ss\.fff", $null) }
+            Catch {}
         }
 
         #endregion
@@ -485,11 +488,15 @@ Begin {
             }
 
             #Results summary
-            if ($lines[$i] -match "Query - (.*)") { $summary.Add([ResultsSummary]::new($Matches[1])) }
+            if ($lines[$i] -match "Results Summary") {           
+                while (-NOT ([String]::IsNullOrEmpty($lines[++$i].Trim()))) { 
+                    $summary.Add([ResultsSummary]::new($lines[$i].Substring(8)))
+                }
+            }                  
    
             #General Queries
-            if ($lines[$i] -match "^(-){27}General") {
-                while (-NOT ([String]::IsNullOrEmpty($lines[++$i].Trim()))) { $general.Add([GeneralQuery]::new($lines[$i])) }
+            if ($lines[$i] -match "^(-){27}General Queries Summary") { 
+                while (-NOT ([String]::IsNullOrEmpty($lines[++$i].Trim()))) { $general.Add([GeneralQuery]::new($lines[$i])) } 
             }
 
             # End Time and runtime
@@ -1100,7 +1107,7 @@ Process {
     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
 
     $end = Get-Date
-    $runtime = (NEW-TIMESPAN –Start $start –End $end).ToString("hh\:mm\:ss")
+    $runtime = (New-TimeSpan –Start $start –End $end).ToString("hh\:mm\:ss")
     Write-Host "Processing Completed at $(Get-Date -Format "HH:mm:ss") with a runtime of $runtime"
     Write-Host "=========="
 }
