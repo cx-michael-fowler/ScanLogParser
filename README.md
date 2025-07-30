@@ -22,7 +22,7 @@ Has seperate tabs for
     .\ScanLogParser.ps1 -help [<CommonParameters>]
     
 ### Parse Log File
-    .\ScanLogParser.ps1 -logPath <string> [<CommonParameters>]
+    .\ScanLogParser.ps1 [-logPath <string>] [<CommonParameters>]
 
 ### Parse Log from Checkmarx One Scan ID
     .\ScanLogParser.ps1 -scanId <string> [-silentLogin -apiKey <string] [<CommonParameters>]
