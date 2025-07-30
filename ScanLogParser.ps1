@@ -18,14 +18,14 @@ Help
     .\ScanLogParser.ps1 -help [<CommonParameters>]
     
 Parse Log File
-    .\ScanLogParser.ps1 -logPath <string> [<CommonParameters>]
+    .\ScanLogParser.ps1 [-logPath <string>] [<CommonParameters>]
 
 Parse Log from Checkmarx One Scan ID
     .\ScanLogParser.ps1 -scanId <string> [-silentLogin -apiKey <string] [<CommonParameters>]
 
 .Notes
-Version:     3.2
-Date:        26/06/2025
+Version:     3.3
+Date:        30/07/2025
 Written by:  Michael Fowler
 Contact:     michael.fowler@checkmarx.com
 
@@ -39,6 +39,7 @@ Version    Detail
 3.0        Add worksheet for Errors
 3.1        Minor bug fix in formatting
 3.2        Modified to allow for changed format of logs
+3.3        Added file picker
   
 .PARAMETER help
 Display help
@@ -61,13 +62,13 @@ The API Key used to log into Checkamrx One. Is mandatory with silentLogin
 #--------------------------------------------------------------------------------------------------------------------------------------------------------------
 #region Parameters
 
-[CmdletBinding(DefaultParametersetName='Help')] 
+[CmdletBinding(DefaultParametersetName='File')] 
 Param (
 
-    [Parameter(ParameterSetName='Help',Mandatory=$false, HelpMessage="Display help")]
+    [Parameter(ParameterSetName='Help',Mandatory=$true, HelpMessage="Display help")]
     [switch]$help,
 
-    [Parameter(ParameterSetName='File',Mandatory=$true, HelpMessage="Enter Full path for scan log")]
+    [Parameter(ParameterSetName='File',Mandatory=$false, HelpMessage="Enter Full path for scan log")]
     [string]$logPath,
 
     [Parameter(ParameterSetName='CxOne',Mandatory=$true, HelpMessage="Enter the Checkmarx One Scan ID")]
@@ -110,10 +111,11 @@ DynamicParam {
 Begin {
 
     if ($scanId) { Import-Module $PSScriptRoot\CxOneAPIModule }
+    else { Add-Type -AssemblyName System.Windows.Forms }
     $apiKey = $PSBoundParameters['apiKey']
 
     #----------------------------------------------------------------------------------------------------------------------------------------------------------
-    #region Variables
+    #region Global Variables
 
     $summary = [System.Collections.Generic.List[ResultsSummary]]::New()
     $general = [System.Collections.Generic.List[GeneralQuery]]::New()
@@ -124,7 +126,8 @@ Begin {
     $details = [LogDetails]::new()
     $errors = [System.Collections.Generic.List[Error]]::New()
     $config = @{}
-    $conn
+    $conn = $null
+    $start = $null
 
     #endregion
     #----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -350,9 +353,9 @@ Begin {
 
     #endregion
     #----------------------------------------------------------------------------------------------------------------------------------------------------------
-    #region Functions
+    #region Common Functions
 
-    Function GetLogFile {
+    Function Get-LogFile {
 
         
         # Call Logs API and capture redirect
@@ -370,7 +373,7 @@ Begin {
         return $response.Split([Environment]::NewLine)
     }
 
-    Function ParseLogFile {
+    Function Parse-LogFile {
         Param (
             [Array]$lines
         )  
@@ -507,7 +510,32 @@ Begin {
         }
     }
 
-    Function WriteDetailsToExcel {
+    Function Get-LogPath {
+        $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
+        $OpenFileDialog.InitialDirectory = [Environment]::GetFolderPath('Desktop')
+        $OpenFileDialog.filter = "Log Files (*.log) | *.log"
+        $OpenFileDialog.ShowDialog() | Out-Null
+        $OpenFileDialog.FileName
+    }
+
+    Function Write-ProcessStart {
+        Write-Host "=========="
+        $start = Get-Date
+        Write-Host "Processing Started at $(Get-Date -Format "HH:mm:ss")"
+    }
+
+    Function Write-ProcessEnd {
+        $end = Get-Date
+        $runtime = (New-TimeSpan –Start $start –End $end).ToString("hh\:mm\:ss")
+        Write-Host "Processing Completed at $(Get-Date -Format "HH:mm:ss") with a runtime of $runtime"
+        Write-Host "=========="
+    }
+
+    #endregion
+    #----------------------------------------------------------------------------------------------------------------------------------------------------------
+    #region Excel Functions
+
+    Function Write-DetailsToExcel {
 
         Write-Verbose "Creating details worksheet" 
         
@@ -527,9 +555,9 @@ Begin {
         
         Write-Verbose "Writing data to worksheet"
         
-        WriteGeneralDetailsToExcel $worksheet
-        WriteParsingSummaryToExcel $worksheet
-        if ($scanId) { WriteCxOneDetailsToExcel $worksheet $metadata $scan }
+        Write-GeneralDetailsToExcel $worksheet
+        Write-ParsingSummaryToExcel $worksheet
+        if ($scanId) { Write-CxOneDetailsToExcel $worksheet $metadata $scan }
        
         #Auto-fit columns
         [void]$worksheet.UsedRange.Cells.EntireColumn.AutoFit()
@@ -537,7 +565,7 @@ Begin {
         Write-Verbose 'Completed writing data to worksheet "Details"'
     }
 
-    Function WriteGeneralDetailsToExcel {
+    Function Write-GeneralDetailsToExcel {
         Param (
             [Microsoft.Office.Interop.Excel.Worksheet]$worksheet
         )
@@ -614,7 +642,7 @@ Begin {
         $worksheet.Range("A1:B13").Borders.LineStyle = 1
     }
 
-    Function WriteParsingSummaryToExcel {
+    Function Write-ParsingSummaryToExcel {
         Param (
             [Microsoft.Office.Interop.Excel.Worksheet]$worksheet
         )
@@ -683,7 +711,7 @@ Begin {
         $worksheet.Range("D1:E9").Borders.LineStyle = 1
     }
 
-    Function WriteCxOneDetailsToExcel {
+    Function Write-CxOneDetailsToExcel {
         Param (
             [Microsoft.Office.Interop.Excel.Worksheet]$worksheet,
             [PSCustomObject]$metadata,
@@ -746,7 +774,7 @@ Begin {
         $worksheet.Range("A15:B24").Borders.LineStyle = 1
     }
 
-    Function WritePhasesToExcel {
+    Function Write-PhasesToExcel {
 
         Write-Verbose "Creating phases worksheet" 
         $worksheet = $workbook.Worksheets.Add()
@@ -789,7 +817,7 @@ Begin {
         Write-Verbose 'Completed writing data to worksheet "Phases"'
     }
 
-    Function WriteFilesToExcel {
+    Function Write-FilesToExcel {
 
         Write-Verbose "Creating Files worksheet" 
     
@@ -834,7 +862,7 @@ Begin {
         Write-Verbose 'Completed writing data to worksheet "Files Processed"'
     }
 
-    Function WriteSummaryToExcel {
+    Function Write-SummaryToExcel {
        
         Write-Verbose "Creating Results Summary worksheet" 
     
@@ -883,7 +911,7 @@ Begin {
         Write-Verbose 'Completed writing data to worksheet "Results Summary"'
     }
 
-    Function WriteGeneralToExcel {
+    Function Write-GeneralToExcel {
             
         Write-Verbose "Creating Results Summary worksheet" 
     
@@ -927,7 +955,7 @@ Begin {
         Write-Verbose 'Completed writing data to worksheet "General Queries"'
     }
 
-    Function WriteErrorsToExcel {
+    Function Write-ErrorsToExcel {
         
         Write-Verbose "Creating Errors worksheet" 
     
@@ -972,7 +1000,7 @@ Begin {
         Write-Verbose 'Completed writing data to worksheet "Errors"'
     }
 
-    Function WritePFExclusionsToExcel {
+    Function Write-PFExclusionsToExcel {
     
         Write-Verbose "Creating Predefined File Exclusions worksheet" 
     
@@ -1009,7 +1037,7 @@ Begin {
         Write-Verbose 'Completed writing data to worksheet "Predefined File Exclusions"'
     }
 
-    Function WriteEngineConfigToExcel {
+    Function Write-EngineConfigToExcel {
     
         Write-Verbose "Creating Engine Configuration worksheet" 
     
@@ -1057,43 +1085,49 @@ Begin {
 Process {
 
     #Display help if called
-    if ($help -OR -NOT($logPath -XOR $scanId)) {
+    if ($help) {
         Get-Help $MyInvocation.InvocationName -Full | Out-String
         exit
     }
 
-    Write-Host "=========="
-    $start = Get-Date
-    Write-Host "Processing Started at $(Get-Date -Format "HH:mm:ss")"
+    Write-ProcessStart
 
     Write-Host "Loading log file"   
-    if ($logPath) { 
-        $lines = Get-Content -path $logPath
-            Write-Host "Log file $logPath loaded"
-    }
-    else { 
+    if ($scanId) { 
         if($silentLogin) { $conn = New-SilentConnection $apiKey }
         else { $conn = New-Connection }     
         $lines = GetLogFile 
         Write-Host "Log file for Scan ID: $scanId loaded"
     }
+    else {
+        if ([String]::IsNullOrEmpty($logPath)) { 
+            $logPath = Get-LogPath $logPath
+            if ([String]::IsNullOrEmpty($logPath)) {
+                Write-Host "A valid log file needs to be selected. Exiting" -f red
+                Write-ProcessEnd
+                exit
+            }
+        }
+        $lines = Get-Content -path $logPath
+        Write-Host "Log file $logPath loaded"
+    }
 
     Write-Host "Parsing log file"
-    ParseLogFile $lines
+    Parse-LogFile $lines
     Write-Host "Completed parsing"
 
     Write-Host "Creating Excel"
     $excel = New-Object -ComObject Excel.Application
     $workbook = $excel.Workbooks.Add()
     
-    WriteDetailsToExcel
-    WriteEngineConfigToExcel
-    if ($details.PredefinedExclusions -gt 0) { WritePFExclusionsToExcel }
-    WriteFilesToExcel
-    WritePhasesToExcel
-    WriteSummaryToExcel
-    WriteGeneralToExcel
-    WriteErrorsToExcel
+    Write-DetailsToExcel
+    Write-EngineConfigToExcel
+    if ($details.PredefinedExclusions -gt 0) { Write-PFExclusionsToExcel }
+    Write-FilesToExcel
+    Write-PhasesToExcel
+    Write-SummaryToExcel
+    Write-GeneralToExcel
+    Write-ErrorsToExcel
 
     $workbook.Worksheets.Item(1).Activate()
 
@@ -1106,10 +1140,7 @@ Process {
     # Release the COM object
     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
 
-    $end = Get-Date
-    $runtime = (New-TimeSpan –Start $start –End $end).ToString("hh\:mm\:ss")
-    Write-Host "Processing Completed at $(Get-Date -Format "HH:mm:ss") with a runtime of $runtime"
-    Write-Host "=========="
+    Write-ProcessEnd
 }
 
 #endregion
