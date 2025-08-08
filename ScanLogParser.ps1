@@ -24,8 +24,8 @@ Parse Log from Checkmarx One Scan ID
     .\ScanLogParser.ps1 -scanId <string> [-silentLogin -apiKey <string] [<CommonParameters>]
 
 .Notes
-Version:     3.3
-Date:        30/07/2025
+Version:     3.4
+Date:        08/08/2025
 Written by:  Michael Fowler
 Contact:     michael.fowler@checkmarx.com
 
@@ -40,6 +40,7 @@ Version    Detail
 3.1        Minor bug fix in formatting
 3.2        Modified to allow for changed format of logs
 3.3        Added file picker
+3.4        Bug Fix
   
 .PARAMETER help
 Display help
@@ -127,7 +128,6 @@ Begin {
     $errors = [System.Collections.Generic.List[Error]]::New()
     $config = @{}
     $conn = $null
-    $start = $null
 
     #endregion
     #----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -505,7 +505,8 @@ Begin {
             # End Time and runtime
             if ($lines[$i] -match "Exit Main") {
                 $details.End = [datetime]::parseexact($lines[$i].substring(0,23), 'dd/MM/yyyy HH:mm:ss,FFF', $null)
-                $details.Runtime =  [TimeSpan]::ParseExact($lines[$i].Substring(91,16), "hh\:mm\:ss\.fffffff", $null)
+                $lines[$i] -match "Elapsed Time: (\d\d:\d\d:\d\d\.\d{7}).*" | Out-Null
+                $details.Runtime =  [TimeSpan]::ParseExact($Matches[1], "hh\:mm\:ss\.fffffff", $null)
             }
         }
     }
@@ -516,19 +517,6 @@ Begin {
         $OpenFileDialog.filter = "Log Files (*.log) | *.log"
         $OpenFileDialog.ShowDialog() | Out-Null
         $OpenFileDialog.FileName
-    }
-
-    Function Write-ProcessStart {
-        Write-Host "=========="
-        $start = Get-Date
-        Write-Host "Processing Started at $(Get-Date -Format "HH:mm:ss")"
-    }
-
-    Function Write-ProcessEnd {
-        $end = Get-Date
-        $runtime = (New-TimeSpan –Start $start –End $end).ToString("hh\:mm\:ss")
-        Write-Host "Processing Completed at $(Get-Date -Format "HH:mm:ss") with a runtime of $runtime"
-        Write-Host "=========="
     }
 
     #endregion
@@ -1090,13 +1078,15 @@ Process {
         exit
     }
 
-    Write-ProcessStart
+    Write-Host "=========="
+    $start = Get-Date
+    Write-Host "Processing Started at $(Get-Date -Format "HH:mm:ss")"
 
     Write-Host "Loading log file"   
     if ($scanId) { 
         if($silentLogin) { $conn = New-SilentConnection $apiKey }
         else { $conn = New-Connection }     
-        $lines = GetLogFile 
+        $lines = Get-LogFile 
         Write-Host "Log file for Scan ID: $scanId loaded"
     }
     else {
@@ -1140,7 +1130,10 @@ Process {
     # Release the COM object
     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
 
-    Write-ProcessEnd
+    $end = Get-Date
+    $runtime = (New-TimeSpan –Start $start –End $end).ToString("hh\:mm\:ss")
+    Write-Host "Processing Completed at $(Get-Date -Format "HH:mm:ss") with a runtime of $runtime"
+    Write-Host "=========="
 }
 
 #endregion
