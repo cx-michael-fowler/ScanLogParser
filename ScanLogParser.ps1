@@ -24,7 +24,7 @@ Parse Log from Checkmarx One Scan ID
     .\ScanLogParser.ps1 -scanId <string> [-silentLogin -apiKey <string] [<CommonParameters>]
 
 .Notes
-Version:     3.4
+Version:     3.5
 Date:        08/08/2025
 Written by:  Michael Fowler
 Contact:     michael.fowler@checkmarx.com
@@ -41,6 +41,7 @@ Version    Detail
 3.2        Modified to allow for changed format of logs
 3.3        Added file picker
 3.4        Bug Fix
+3.5        Added text files to file picker
   
 .PARAMETER help
 Display help
@@ -514,7 +515,7 @@ Begin {
     Function Get-LogPath {
         $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
         $OpenFileDialog.InitialDirectory = [Environment]::GetFolderPath('Desktop')
-        $OpenFileDialog.filter = "Log Files (*.log) | *.log"
+        $OpenFileDialog.filter = "Log Files | *.log;*.txt"
         $OpenFileDialog.ShowDialog() | Out-Null
         $OpenFileDialog.FileName
     }
