@@ -66,14 +66,15 @@ The following functions are available for this module
         Example
             $projects = Get-AllProjects $conn "<project_id_1>,<project_id_2>,<project_id_3>"
         
-     Get-Applications
+    Get-Applications
         Details
             Function to get a hash of all applications
             Key = Application ID and Value = Application Object 
         Parameters
             CxOneConnObj - Checkmarx One connection object
+            getRisk - Optional switch to retrieve application risk fields
         Example
-            $applications = Get-Applications $conn
+            $applications = Get-Applications $conn -getRisk
     
     Get-AllScans
         Details

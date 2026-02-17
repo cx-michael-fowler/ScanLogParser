@@ -6,8 +6,8 @@
     This module has been created to simplify common tasks when scritpting for Checkmarx One
 
 .Notes   
-    Version:     7.5
-    Date:        28/07/2025
+    Version:     7.6
+    Date:        01/08/2025
     Written by:  Michael Fowler
     Contact:     michael.fowler@checkmarx.com
     
@@ -42,7 +42,8 @@
     7.3        Modified last scan to return Project ID as key and include null values for projects with no scans
     7.4        Added function to return scan between two dates filter by status + changed scan function names
     7.5        Add function to get scans filtered by hash of projects as returned by Get-Projects methods
-
+    7.6        Add option to retrieve Application risk
+    
 .Description
     The following functions are available for this module
     
@@ -116,8 +117,9 @@
             Key = Application ID and Value = Application Object 
         Parameters
             CxOneConnObj - Checkmarx One connection object
+            getRisk - Optional switch to retrieve application risk fields
         Example
-            $applications = Get-Applications $conn
+            $applications = Get-Applications $conn -getRisk
         
     Get-AllScans
         Details
@@ -325,10 +327,13 @@ Function Get-ProjectsByIds {
 Function Get-Applications {
     Param(
         [Parameter(Mandatory=$true)]
-        [CxOneConnection]$CxOneConnObj
+        [CxOneConnection]$CxOneConnObj,
+        
+        [Parameter(Mandatory=$false)]
+        [Switch]$getRisk
     )
 
-    return ([Applications]::new($CxOneConnObj)).ApplicationsHash
+    return ([Applications]::new($CxOneConnObj, $getRisk)).ApplicationsHash
 }
 
 #Get all scans filtered by CSV string of statuses. If all statuses are required use "All" only for status
@@ -1022,6 +1027,8 @@ class Application {
     [Array]$ProjectIds
     [Array]$ProjectIdsString
     [String]$ProjectNames
+    [String]$RiskScore
+    [String]$RiskSeverity
 
     #endregion    
     #------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1070,6 +1077,11 @@ class Application {
         }
     }
 
+    [void] Hidden AddRisk([PSCustomObject]$obj) {   
+        $this.RiskScore = $obj.riskScore
+        $this.RiskSeverity = $obj.riskSeverity
+    }
+
     #endregion    
     #------------------------------------------------------------------------------------------------------------------------------------------------
 }
@@ -1094,14 +1106,13 @@ class Applications {
     #region Constructors
 
     #Get All Applications
-    Applications([CxOneConnection]$conn) { $this.GetApplicationsHash($conn) }
-    
+    Applications([CxOneConnection]$conn, [Switch]$getRisk ) { $this.GetApplicationsHash($conn, [Switch]$getRisk ) }
     
     #endregion
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Hidden Methods
 
-    [void] Hidden GetApplicationsHash([CxOneConnection]$conn) {
+    [void] Hidden GetApplicationsHash([CxOneConnection]$conn, [Switch]$getRisk ) {
         
         Write-Verbose "Retrieving Applications"
 
@@ -1131,6 +1142,19 @@ class Applications {
             $this.Offset += $this.Limit
             
         } while ($this.Offset -lt $this.filteredTotalCount)
+        
+        if ($getRisk) { $this.GetRisks($conn) }
+    }
+    
+    [void] Hidden GetRisks([CxOneConnection]$conn) {
+        
+        Write-Verbose "Retrieving applications risks"
+        
+        $uri = "$($conn.baseUri)/api/risk-management/summary"
+        $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers} $conn
+        foreach ($app in $response.summary) { $this.ApplicationsHash[$app.id].AddRisk($app) }
+        
+        Write-Verbose "Applications risks retrived"
     }
 
     #endregion
