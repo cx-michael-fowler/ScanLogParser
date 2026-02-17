@@ -24,8 +24,8 @@ Parse Log from Checkmarx One Scan ID
     .\ScanLogParser.ps1 -scanId <string> [-silentLogin -apiKey <string] [<CommonParameters>]
 
 .Notes
-Version:     3.5
-Date:        08/08/2025
+Version:     3.6
+Date:        18/02/2026
 Written by:  Michael Fowler
 Contact:     michael.fowler@checkmarx.com
 
@@ -42,6 +42,7 @@ Version    Detail
 3.3        Added file picker
 3.4        Bug Fix
 3.5        Added text files to file picker
+3.6        Added Sources identified and languages excluded
   
 .PARAMETER help
 Display help
@@ -242,7 +243,9 @@ Begin {
             [String]$AvailableMemory
             [String]$ProjectName
             [String]$ProjectId
+            [String]$IdentifiedFiles
             [String]$ScannedLanguages
+            [String]$NotScannedLanguages
             [String]$MultiLanguageMode
             [String]$RelativePath
             [Int]$ExcludeFiles
@@ -431,8 +434,14 @@ Begin {
                 $details.PredefinedExclusions = $Matches[1]
             }
 
+            #Identified Files
+            if ($lines[$i] -match "The following source files were identified: (.*)") { $details.IdentifiedFiles = $Matches[1] }
+            
             #Scanned Languages
             if ($lines[$i] -match "Languages that will be scanned: (.*)") { $details.ScannedLanguages = $Matches[1] }
+
+            #Languages Identified but not scanned
+            if ($lines[$i] -match "All languages identified but not scanned: (.*)") { $details.NotScannedLanguages = $Matches[1] }
 
             #Multi-Language Mode
             if ($lines[$i] -match "MULTI_LANGUAGE_MODE is set") { $details.MultiLanguageMode = $lines[$i] }
@@ -606,29 +615,39 @@ Begin {
         $worksheet.Range("A9").Font.Bold=$True
         $worksheet.Range("B9") = $details.ProjectId
 
-        #Scanned Languages
-        $worksheet.Range("A10") = "Scanned Languages"
+        #Soruce Files Identified
+        $worksheet.Range("A10") = "Identified Source Files"
         $worksheet.Range("A10").Font.Bold=$True
-        $worksheet.Range("B10") = $details.ScannedLanguages
+        $worksheet.Range("B10") = $details.IdentifiedFiles
+
+        #Scanned Languages
+        $worksheet.Range("A11") = "Scanned Languages"
+        $worksheet.Range("A11").Font.Bold=$True
+        $worksheet.Range("B11") = $details.ScannedLanguages
+
+        #Not Scanned Languages
+        $worksheet.Range("A12") = "Not Scanned Languages"
+        $worksheet.Range("A12").Font.Bold=$True
+        $worksheet.Range("B12") = $details.NotScannedLanguages
 
         #Multi-Language Mode
-        $worksheet.Range("A11") = "Multi-Language Mode"
-        $worksheet.Range("A11").Font.Bold=$True
-        $worksheet.Range("B11") = $details.MultiLanguageMode
+        $worksheet.Range("A13") = "Multi-Language Mode"
+        $worksheet.Range("A13").Font.Bold=$True
+        $worksheet.Range("B13") = $details.MultiLanguageMode
 
         #Predefined Excluded Files Count
-        $worksheet.Range("A12") = "Predefined File Exclusions"
-        $worksheet.Range("A12").Font.Bold=$True
-        $worksheet.Range("B12") = $details.PredefinedExclusions
+        $worksheet.Range("A14") = "Predefined File Exclusions"
+        $worksheet.Range("A14").Font.Bold=$True
+        $worksheet.Range("B14") = $details.PredefinedExclusions
 
         #Excluded Files Count
-        $worksheet.Range("A13") = "Excluded Files Count"
-        $worksheet.Range("A13").Font.Bold=$True
-        $worksheet.Range("B13") = $details.ExcludeFiles
+        $worksheet.Range("A15") = "Excluded Files Count"
+        $worksheet.Range("A15").Font.Bold=$True
+        $worksheet.Range("B15") = $details.ExcludeFiles
 
         #Formatting
-        $worksheet.Range("B1:B13").HorizontalAlignment = -4131 #Align Left
-        $worksheet.Range("A1:B13").Borders.LineStyle = 1
+        $worksheet.Range("B1:B15").HorizontalAlignment = -4131 #Align Left
+        $worksheet.Range("A1:B15").Borders.LineStyle = 1
     }
 
     Function Write-ParsingSummaryToExcel {
