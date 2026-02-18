@@ -24,8 +24,8 @@ Parse Log from Checkmarx One Scan ID
     .\ScanLogParser.ps1 -scanId <string> [-silentLogin -apiKey <string] [<CommonParameters>]
 
 .Notes
-Version:     3.6
-Date:        18/02/2026
+Version:     3.7
+Date:        19/02/2026
 Written by:  Michael Fowler
 Contact:     michael.fowler@checkmarx.com
 
@@ -43,6 +43,7 @@ Version    Detail
 3.4        Bug Fix
 3.5        Added text files to file picker
 3.6        Added Sources identified and languages excluded
+3.7        Added details for incremental scans
   
 .PARAMETER help
 Display help
@@ -243,6 +244,9 @@ Begin {
             [String]$AvailableMemory
             [String]$ProjectName
             [String]$ProjectId
+            [bool]$IncrementalScan = $false
+            [Int]$IncrementalFilesChanged
+            [Int]$IncrementalFilesClosure
             [String]$IdentifiedFiles
             [String]$ScannedLanguages
             [String]$NotScannedLanguages
@@ -411,6 +415,15 @@ Begin {
                 }
             }
         
+            #Incremental Scan, Files changed, Closure Files
+            if ($lines[$i]-match "(Incremental Scan: number of files changed: )(\d+)(.*)") { 
+                $details.IncrementalScan = $true
+                $details.IncrementalFilesChanged = $Matches[2]
+                while ($lines[++$i] -notmatch "Incremental Scan") {}
+                $lines[$i]-match "(Incremental Scan: number of files in closure: )(\d+)(.*)"
+                $details.IncrementalFilesClosure = $Matches[2]
+            }
+            
             #Solution Relative Path
             if ($lines[$i]-match "(Solution relative path is: ')(.*)(')") { $details.RelativePath = $Matches[2] }
 
@@ -555,6 +568,7 @@ Begin {
         
         Write-GeneralDetailsToExcel $worksheet
         Write-ParsingSummaryToExcel $worksheet
+        if ($details.IncrementalScan) { Write-IncrementalDetailsToExcel $worksheet }
         if ($scanId) { Write-CxOneDetailsToExcel $worksheet $metadata $scan }
        
         #Auto-fit columns
@@ -620,34 +634,39 @@ Begin {
         $worksheet.Range("A10").Font.Bold=$True
         $worksheet.Range("B10") = $details.IdentifiedFiles
 
-        #Scanned Languages
-        $worksheet.Range("A11") = "Scanned Languages"
+        #Incremental Scan
+        $worksheet.Range("A11") = "Incremental Scan"
         $worksheet.Range("A11").Font.Bold=$True
-        $worksheet.Range("B11") = $details.ScannedLanguages
+        $worksheet.Range("B11") = $details.IncrementalScan
+        
+        #Scanned Languages
+        $worksheet.Range("A12") = "Scanned Languages"
+        $worksheet.Range("A12").Font.Bold=$True
+        $worksheet.Range("B12") = $details.ScannedLanguages
 
         #Not Scanned Languages
-        $worksheet.Range("A12") = "Not Scanned Languages"
-        $worksheet.Range("A12").Font.Bold=$True
-        $worksheet.Range("B12") = $details.NotScannedLanguages
+        $worksheet.Range("A13") = "Not Scanned Languages"
+        $worksheet.Range("A13").Font.Bold=$True
+        $worksheet.Range("B13") = $details.NotScannedLanguages
 
         #Multi-Language Mode
-        $worksheet.Range("A13") = "Multi-Language Mode"
-        $worksheet.Range("A13").Font.Bold=$True
-        $worksheet.Range("B13") = $details.MultiLanguageMode
+        $worksheet.Range("A14") = "Multi-Language Mode"
+        $worksheet.Range("A14").Font.Bold=$True
+        $worksheet.Range("B14") = $details.MultiLanguageMode
 
         #Predefined Excluded Files Count
-        $worksheet.Range("A14") = "Predefined File Exclusions"
-        $worksheet.Range("A14").Font.Bold=$True
-        $worksheet.Range("B14") = $details.PredefinedExclusions
+        $worksheet.Range("A15") = "Predefined File Exclusions"
+        $worksheet.Range("A15").Font.Bold=$True
+        $worksheet.Range("B15") = $details.PredefinedExclusions
 
         #Excluded Files Count
-        $worksheet.Range("A15") = "Excluded Files Count"
-        $worksheet.Range("A15").Font.Bold=$True
-        $worksheet.Range("B15") = $details.ExcludeFiles
+        $worksheet.Range("A16") = "Excluded Files Count"
+        $worksheet.Range("A16").Font.Bold=$True
+        $worksheet.Range("B16") = $details.ExcludeFiles
 
         #Formatting
-        $worksheet.Range("B1:B15").HorizontalAlignment = -4131 #Align Left
-        $worksheet.Range("A1:B15").Borders.LineStyle = 1
+        $worksheet.Range("B1:B16").HorizontalAlignment = -4131 #Align Left
+        $worksheet.Range("A1:B16").Borders.LineStyle = 1
     }
 
     Function Write-ParsingSummaryToExcel {
@@ -717,6 +736,31 @@ Begin {
 
         #Formatting
         $worksheet.Range("D1:E9").Borders.LineStyle = 1
+    }
+
+    Function Write-IncrementalDetailsToExcel {
+        Param (
+            [Microsoft.Office.Interop.Excel.Worksheet]$worksheet
+        )
+
+        #Header
+        $worksheet.Range("D11:E11").Merge()
+        $worksheet.Range("D11:E11") = "Incremental Details"
+        $worksheet.Range("D11:E11").HorizontalAlignment = -4108
+        $worksheet.Range("D11:E11").Font.Bold=$True
+    
+        #Files Changed
+        $worksheet.Range("D12") = "Files Changed"
+        $worksheet.Range("D12").Font.Bold=$True
+        $worksheet.Range("E12") = $details.IncrementalFilesChanged
+
+        #Closure Files
+        $worksheet.Range("D13") = "Closure Files"
+        $worksheet.Range("D13").Font.Bold=$True
+        $worksheet.Range("E13") = $details.IncrementalFilesClosure
+
+        #Formatting
+        $worksheet.Range("D11:E13").Borders.LineStyle = 1
     }
 
     Function Write-CxOneDetailsToExcel {
