@@ -1,4 +1,4 @@
-﻿#--------------------------------------------------------------------------------------------------------------------------------------------------------------
+#--------------------------------------------------------------------------------------------------------------------------------------------------------------
 #region Help
 
 <#
@@ -24,8 +24,8 @@ Parse Log from Checkmarx One Scan ID
     .\ScanLogParser.ps1 -scanId <string> [-silentLogin -apiKey <string] [<CommonParameters>]
 
 .Notes
-Version:     3.7
-Date:        19/02/2026
+Version:     3.8
+Date:        22/04/2026
 Written by:  Michael Fowler
 Contact:     michael.fowler@checkmarx.com
 
@@ -44,6 +44,7 @@ Version    Detail
 3.5        Added text files to file picker
 3.6        Added Sources identified and languages excluded
 3.7        Added details for incremental scans
+3.8        Using Basic parsing to avoid warnings + suppressed excel warnings + bug fix
   
 .PARAMETER help
 Display help
@@ -368,7 +369,7 @@ Begin {
         
         # Call Logs API and capture redirect
         $uri = "$($conn.BaseUri)/api/logs/$scanId/sast"
-        $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers -MaximumRedirection 0 } $conn 
+        $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers -UseBasicParsing -MaximumRedirection 0 } $conn 
         
         #Set header and URI for redirect
         $tempHeader = $response.headers
@@ -377,7 +378,7 @@ Begin {
         $uri = $response.headers["Location"]
         
         #Get log file and return as array
-        $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $tempHeader} $conn
+        $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $tempHeader -UseBasicParsing } $conn
         return $response.Split([Environment]::NewLine)
     }
 
@@ -555,11 +556,11 @@ Begin {
 
         if ($scanId) {
             write-host "Retrieving additional scan data from Checkmarx One"
-            $scan =  (Get-ScansByIds $conn "All" $scanId)[$scanId]
+            $scan =  (Get-ScansByIds $conn $scanId)
             $details.ProjectName = $scan.ProjectName
 
             $uri = "$($conn.BaseUri)/api/sast-metadata/$scanId"
-            $metadata = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers  } $conn
+            $metadata = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn
 
             write-host "Additional scan data retrieved"
         }
@@ -779,12 +780,12 @@ Begin {
         #Status
         $worksheet.Range("A16") = "Scan Status"
         $worksheet.Range("A16").Font.Bold=$True
-        $worksheet.Range("B16") = $scan.Status
+        $worksheet.Range("B16") = $scan.Values[0].Status
         
         #Branch
         $worksheet.Range("A17") = "Branch"
         $worksheet.Range("A17").Font.Bold=$True
-        $worksheet.Range("B17") = $scan.Branch
+        $worksheet.Range("B17") = $scan.Values[0].Branch
         
         #Preset
         $worksheet.Range("A18") = "Preset"
@@ -809,17 +810,17 @@ Begin {
         #Initiator
         $worksheet.Range("A22") = "Initiator"
         $worksheet.Range("A22").Font.Bold=$True
-        $worksheet.Range("B22") = $scan.Initiator
+        $worksheet.Range("B22") = $scan.Values[0].Initiator
         
         #Source Type
         $worksheet.Range("A23") = "Source Type"
         $worksheet.Range("A23").Font.Bold=$True
-        $worksheet.Range("B23") = $scan.SourceType
+        $worksheet.Range("B23") = $scan.Values[0].SourceType
 
         #Source Origin
         $worksheet.Range("A24") = "Source Origin"
         $worksheet.Range("A24").Font.Bold=$True
-        $worksheet.Range("B24") = $scan.SourceOrigin
+        $worksheet.Range("B24") = $scan.Values[0].SourceOrigin
 
         #Formatting
         $worksheet.Range("B16:B24").HorizontalAlignment = -4131 #Align Left
@@ -1173,7 +1174,8 @@ Process {
     Write-Host "Creating Excel"
     $excel = New-Object -ComObject Excel.Application
     $workbook = $excel.Workbooks.Add()
-    
+
+    $excel.DisplayAlerts = $false
     Write-DetailsToExcel
     Write-EngineConfigToExcel
     if ($details.PredefinedExclusions -gt 0) { Write-PFExclusionsToExcel }
@@ -1182,6 +1184,7 @@ Process {
     Write-SummaryToExcel
     Write-GeneralToExcel
     Write-ErrorsToExcel
+    $excel.DisplayAlerts = $true
 
     $workbook.Worksheets.Item(1).Activate()
 
