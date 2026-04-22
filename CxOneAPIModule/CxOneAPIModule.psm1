@@ -6,8 +6,8 @@
     This module has been created to simplify common tasks when scritpting for Checkmarx One
 
 .Notes   
-    Version:     7.6
-    Date:        01/08/2025
+    Version:     7.7
+    Date:        04/03/2026
     Written by:  Michael Fowler
     Contact:     michael.fowler@checkmarx.com
     
@@ -43,6 +43,8 @@
     7.4        Added function to return scan between two dates filter by status + changed scan function names
     7.5        Add function to get scans filtered by hash of projects as returned by Get-Projects methods
     7.6        Add option to retrieve Application risk
+    7.7        Updated SSCS results to identify Secrets vs Scorecard and change counters from Secrets to SSCS
+    7.8        Added -UseBasicParsing switch to all Invoke-WebRequest and Invoke-RestMethod calls
     
 .Description
     The following functions are available for this module
@@ -57,7 +59,7 @@
             CxOneConnObj - a Checkmarx One connection object
             noerror - switch to ignore error hanlder and rethrow the error
         Examplle 
-            $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers } $conn
+            $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn
     
     New-Connection
         Details
@@ -764,7 +766,7 @@ class CxOneConnection {
             refresh_token = $apikey
         }
         try {
-            $accessToken = (Invoke-RestMethod -Uri $uri -Method POST -Body $body).access_token
+            $accessToken = (Invoke-RestMethod -Uri $uri -Method POST -Body $body -UseBasicParsing).access_token
         }
         catch {
             Write-Verbose "Error authenticating."
@@ -964,7 +966,7 @@ class Projects {
                 $projectIds -split "," | ForEach-Object { $uri += "&ids=$([uri]::EscapeUriString($_))" }
             }
             
-            $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers} $conn
+            $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn
             $json = ([System.Web.Script.Serialization.JavaScriptSerializer]::New()).DeserializeObject($response) 
         
             if ($this.Offset -eq 0) { 
@@ -991,7 +993,7 @@ class Projects {
             
             do {
                 $uri = "$($conn.baseUri)/api/projects/branches?offset=$($this.Offset)&limit=$($this.Limit)&project-id=$p"
-                $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers } $conn
+                $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn
 
                 if ($response -ne "null") {
                     $this.ProjectsHash[$p].AddBranches($response)
@@ -1128,7 +1130,7 @@ class Applications {
             $uri = "$($conn.baseUri)/api/applications/?offset=$($this.Offset)&limit=$($this.Limit)"
         
             
-            $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers} $conn
+            $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn
             $json = ([System.Web.Script.Serialization.JavaScriptSerializer]::New()).DeserializeObject($response) 
         
             if ($this.Offset -eq 0) { 
@@ -1151,7 +1153,7 @@ class Applications {
         Write-Verbose "Retrieving applications risks"
         
         $uri = "$($conn.baseUri)/api/risk-management/summary"
-        $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers} $conn
+        $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn
         foreach ($app in $response.summary) { $this.ApplicationsHash[$app.id].AddRisk($app) }
         
         Write-Verbose "Applications risks retrived"
@@ -1383,7 +1385,7 @@ class Scans {
             if ($scanIds) { $uri += "&scan-ids=$scanIds" }
             if ($projectsHash) { $uri += "&project-ids=$($projectsHash.keys -join ",")" }
            
-            $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers} $conn
+            $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn
             $json = ([System.Web.Script.Serialization.JavaScriptSerializer]::New()).DeserializeObject($response) 
         
             if ($this.Offset -eq 0) { 
@@ -1433,7 +1435,7 @@ class Scans {
                 if (-NOT [string]::IsNullOrEmpty($branchName)) { $uri += "&branch=$branchName" }
             }
 
-            $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers } $conn
+            $response = ApiCall { Invoke-WebRequest $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn
             $json = ([System.Web.Script.Serialization.JavaScriptSerializer]::New()).DeserializeObject($response)
             $scan = $json[$p.projectId]
             if ($null -eq $scan) { $this.ScansHash.Add($p.projectId, $null) }
@@ -1724,6 +1726,7 @@ class SscsResult : Result {
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Variables
     
+    [string]$Type
     [string]$RuleId
     [string]$RuleName
     [string]$FileName
@@ -1742,13 +1745,14 @@ class SscsResult : Result {
     
     SscsResult() {}
 
-    SscsResult ([PSCustomObject]$result): base($result) { $this.SetVariables($result) }
+    SscsResult ([String]$type, [PSCustomObject]$result): base($result) { $this.SetVariables($type, $result) }
 
     #endregion
     #------------------------------------------------------------------------------------------------------------------------------------------------
     #region Hidden Methods
     
-    [void] Hidden SetVariables([PSCustomObject]$result) {
+    [void] Hidden SetVariables([String]$type,[PSCustomObject]$result) {
+        $this.Type = $type
         $this.RuleId = $result.data.ruleId
         $this.RuleName = $result.data.ruleName
         $this.FileName = $result.data.fileName
@@ -1804,7 +1808,7 @@ Class Results {
         
             $uri = "$($conn.baseUri)/api/results/?scan-id=$scanId&offset=$($this.Offset)&limit=$($this.Limit)"
             
-            $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers } $conn
+            $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn
         
             if ($this.Offset -eq 0) { $this.TotalCount = $response.totalCount }
 
@@ -1814,8 +1818,8 @@ Class Results {
                     "kics" { $this.ResultsList.Add([KicsResult]::new($r)) }
                     "containers" { $this.ResultsList.Add([ContainerResult]::new($r)) }
                     "sca" { $this.ResultsList.Add([ScaResult]::new($r)) }
-                    "sscs-scorecard" { $this.ResultsList.Add([SscsResult]::new($r)) }
-                    "sscs-secret-detection" { $this.ResultsList.Add([SscsResult]::new($r)) }
+                    "sscs-scorecard" { $this.ResultsList.Add([SscsResult]::new("scorecard",$r)) }
+                    "sscs-secret-detection" { $this.ResultsList.Add([SscsResult]::new("secret",$r)) }
                     default { $this.ResultsList.Add([Result]::new($r)) }
                 }
             }
@@ -1844,7 +1848,7 @@ class SeverityCount {
     [HashTable]$Sca
     [HashTable]$Packages
     [HashTable]$Api
-    [HashTable]$Secrets   
+    [HashTable]$SSCS  
     [HashTable]$Containers
     
     #endregion    
@@ -1893,8 +1897,8 @@ class SeverityCount {
         $this.Api = $this.CreateHashAndIncrementTotal($summary.apiSecCounters.totalCounter)
         $this.SetCounts($summary.apiSecCounters.severityCounters, $this.Api)
 
-        $this.Secrets = $this.CreateHashAndIncrementTotal($summary.microEnginesCounters.totalCounter)
-        $this.SetCounts($summary.microEnginesCounters.severityCounters, $this.Secrets)
+        $this.SSCS = $this.CreateHashAndIncrementTotal($summary.microEnginesCounters.totalCounter)
+        $this.SetCounts($summary.microEnginesCounters.severityCounters, $this.SSCS)
 
         $this.Containers = $this.CreateHashAndIncrementTotal($summary.containersCounters.totalCounter)
         $this.SetCounts($summary.containersCounters.severityCounters, $this.Containers)
@@ -1978,7 +1982,7 @@ class SeverityCounters {
         
         foreach ($scan in $ScansHash.values) {    
             $uri = "$($conn.BaseURI)/api/scan-summary/?scan-ids=$($scan.ScanID)"
-            $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers } $conn
+            $response = ApiCall { Invoke-RestMethod $uri -Method GET -Headers $conn.Headers -UseBasicParsing } $conn
             $this.SeverityCountersHash.Add($scan.ScanID, [SeverityCount]::new($response.scansSummaries))
         }
     }
